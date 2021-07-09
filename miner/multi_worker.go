@@ -92,11 +92,21 @@ func newMultiWorker(config *Config, chainConfig *params.ChainConfig, engine cons
 			}))
 	}
 
+	if config.ReorgBool {
+		workers = append(workers,
+			newWorker(config, chainConfig, engine, eth, mux, isLocalBlock, init, &flashbotsData{
+				isFlashbots:      true,
+				queue:            queue,
+				maxMergedBundles: -1,
+			}))
+	}
+
 	log.Info("creating multi worker", "config.MaxMergedBundles", config.MaxMergedBundles, "worker", len(workers))
 	return &multiWorker{
 		regularWorker: regularWorker,
 		workers:       workers,
 	}
+
 }
 
 type flashbotsData struct {
