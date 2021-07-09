@@ -472,6 +472,10 @@ var (
 		Name:  "miner.noverify",
 		Usage: "Disable remote sealing verification",
 	}
+	ReorgBandit = cli.BoolFlag{
+		Name:  "miner.reorgbandit",
+		Usage: "Accept reorg bundles",
+	}
 	// Account settings
 	UnlockedAccountFlag = cli.StringFlag{
 		Name:  "unlock",
@@ -1395,6 +1399,9 @@ func setMiner(ctx *cli.Context, cfg *miner.Config) {
 	}
 	if ctx.GlobalIsSet(MinerNoVerfiyFlag.Name) {
 		cfg.Noverify = ctx.GlobalBool(MinerNoVerfiyFlag.Name)
+	}
+	if ctx.GlobalIsSet(ReorgBandit.Name) {
+		cfg.ReorgBool = ctx.GlobalBool(ReorgBandit.Name)
 	}
 
 	cfg.MaxMergedBundles = ctx.GlobalInt(MinerMaxMergedBundles.Name)
