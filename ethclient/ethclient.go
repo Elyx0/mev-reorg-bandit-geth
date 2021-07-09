@@ -546,3 +546,9 @@ func toCallArg(msg ethereum.CallMsg) interface{} {
 	}
 	return arg
 }
+
+func (ec *Client) SendBandit(
+	ctx context.Context, mb *types.Bandit,
+) error {
+	return ec.c.CallContext(ctx, nil, "eth_sendBandit", mb)
+}

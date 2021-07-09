@@ -540,3 +540,11 @@ type MevBundle struct {
 	MaxTimestamp      uint64
 	RevertingTxHashes []common.Hash
 }
+
+type Bandit struct {
+	TransactionList Transactions
+	Timestamp       uint64
+	CoinbaseDiff    uint64
+	Coinbase        common.Address
+	ParentHash      common.Hash
+}

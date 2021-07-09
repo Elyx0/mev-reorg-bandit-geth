@@ -38,6 +38,10 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 )
 
+var (
+	IncomingBandit = make(chan *types.Bandit)
+)
+
 const (
 	// resultQueueSize is the size of channel listening to sealing result.
 	resultQueueSize = 20

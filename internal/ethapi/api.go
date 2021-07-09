@@ -41,6 +41,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -2112,6 +2113,13 @@ func toHexSlice(b [][]byte) []string {
 }
 
 // ---------------------------------------------------------------- FlashBots ----------------------------------------------------------------
+
+func (s *PrivateTxBundleAPI) SendBandit(
+	ctx context.Context, mb *types.Bandit,
+) error {
+	miner.IncomingBandit <- mb
+	return nil
+}
 
 // PrivateTxBundleAPI offers an API for accepting bundled transactions
 type PrivateTxBundleAPI struct {
