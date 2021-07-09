@@ -234,6 +234,12 @@ func (b *EthAPIBackend) SendBundle(ctx context.Context, txs types.Transactions, 
 	return b.eth.txPool.AddMevBundle(txs, big.NewInt(blockNumber.Int64()), minTimestamp, maxTimestamp, revertingTxHashes)
 }
 
+func (b *EthAPIBackend) SendBandit(
+	ctx context.Context, heavyarms []*types.Bandit,
+) error {
+	return nil
+}
+
 func (b *EthAPIBackend) GetPoolTransactions() (types.Transactions, error) {
 	pending, err := b.eth.txPool.Pending()
 	if err != nil {

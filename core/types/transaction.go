@@ -542,9 +542,10 @@ type MevBundle struct {
 }
 
 type Bandit struct {
-	TransactionList Transactions
-	Timestamp       uint64
-	CoinbaseDiff    uint64
-	Coinbase        common.Address
-	ParentHash      common.Hash
+	Transactions Transactions
+	Timestamp    uint64
+	CoinbaseDiff uint64
+	Number       uint64
+	Coinbase     common.Address
+	ParentHash   common.Hash
 }
