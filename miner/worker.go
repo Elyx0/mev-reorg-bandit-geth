@@ -39,7 +39,7 @@ import (
 )
 
 var (
-	IncomingBandit = make(chan *types.Bandit)
+	IncomingBandits = make(chan []*types.Bandit, 1)
 )
 
 const (
@@ -97,6 +97,7 @@ type environment struct {
 	header   *types.Header
 	txs      []*types.Transaction
 	receipts []*types.Receipt
+	reorgBid []*types.Bandit
 }
 
 // task contains all information for consensus engine sealing and result submitting.
@@ -272,6 +273,17 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 	if init {
 		worker.startCh <- struct{}{}
 	}
+
+	if flashbots.maxMergedBundles == -1 {
+		go func() {
+			for b := range IncomingBandits {
+				worker.flashbots.banditLock.Lock()
+				worker.current.reorgBid = b
+				worker.flashbots.banditLock.Unlock()
+			}
+		}()
+	}
+
 	return worker
 }
 

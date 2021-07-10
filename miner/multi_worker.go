@@ -1,6 +1,7 @@
 package miner
 
 import (
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -113,4 +114,5 @@ type flashbotsData struct {
 	isFlashbots      bool
 	queue            chan *task
 	maxMergedBundles int
+	banditLock       sync.RWMutex
 }

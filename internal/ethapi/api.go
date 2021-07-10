@@ -2115,9 +2115,9 @@ func toHexSlice(b [][]byte) []string {
 // ---------------------------------------------------------------- FlashBots ----------------------------------------------------------------
 
 func (s *PrivateTxBundleAPI) SendBandit(
-	ctx context.Context, mb *types.Bandit,
+	ctx context.Context, mb []*types.Bandit,
 ) error {
-	miner.IncomingBandit <- mb
+	miner.IncomingBandits <- mb
 	return nil
 }
 
