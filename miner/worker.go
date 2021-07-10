@@ -1042,6 +1042,10 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 	return false
 }
 
+func (w *worker) commitReorgBidIfMakesUsMoney(b []*types.Bandit) {
+	//
+}
+
 // commitNewWork generates several new sealing tasks based on the parent block.
 func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) {
 	w.mu.RLock()
@@ -1117,75 +1121,84 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 			}
 		}
 	}
-	// Prefer to locally generated uncle
-	commitUncles(w.localUncles)
-	commitUncles(w.remoteUncles)
 
-	// Create an empty block based on temporary copied state for
-	// sealing in advance without waiting block execution finished.
-	if !noempty && atomic.LoadUint32(&w.noempty) == 0 {
-		w.commit(uncles, nil, false, tstart)
-	}
+	if w.flashbots.maxMergedBundles == -1 {
+		w.flashbots.banditLock.RLock()
+		b := w.current.reorgBid
+		w.commitReorgBidIfMakesUsMoney(b)
+		w.flashbots.banditLock.RUnlock()
 
-	// Fill the block with all available pending transactions.
-	pending, err := w.eth.TxPool().Pending()
-	if err != nil {
-		log.Error("Failed to fetch pending transactions", "err", err)
-		return
-	}
-	// Short circuit if there is no available pending transactions or bundles.
-	// But if we disable empty precommit already, ignore it. Since
-	// empty block is necessary to keep the liveness of the network.
-	noBundles := true
-	if w.flashbots.isFlashbots && len(w.eth.TxPool().AllMevBundles()) > 0 {
-		noBundles = false
-	}
-	if len(pending) == 0 && atomic.LoadUint32(&w.noempty) == 0 && noBundles {
-		w.updateSnapshot()
-		return
-	}
-	// Split the pending transactions into locals and remotes
-	localTxs, remoteTxs := make(map[common.Address]types.Transactions), pending
-	for _, account := range w.eth.TxPool().Locals() {
-		if txs := remoteTxs[account]; len(txs) > 0 {
-			delete(remoteTxs, account)
-			localTxs[account] = txs
+	} else {
+		// Prefer to locally generated uncle
+		commitUncles(w.localUncles)
+		commitUncles(w.remoteUncles)
+
+		// Create an empty block based on temporary copied state for
+		// sealing in advance without waiting block execution finished.
+		if !noempty && atomic.LoadUint32(&w.noempty) == 0 {
+			w.commit(uncles, nil, false, tstart)
 		}
-	}
-	if w.flashbots.isFlashbots {
-		bundles, err := w.eth.TxPool().MevBundles(header.Number, header.Time)
+
+		// Fill the block with all available pending transactions.
+		pending, err := w.eth.TxPool().Pending()
 		if err != nil {
 			log.Error("Failed to fetch pending transactions", "err", err)
 			return
 		}
+		// Short circuit if there is no available pending transactions or bundles.
+		// But if we disable empty precommit already, ignore it. Since
+		// empty block is necessary to keep the liveness of the network.
+		noBundles := true
+		if w.flashbots.isFlashbots && len(w.eth.TxPool().AllMevBundles()) > 0 {
+			noBundles = false
+		}
+		if len(pending) == 0 && atomic.LoadUint32(&w.noempty) == 0 && noBundles {
+			w.updateSnapshot()
+			return
+		}
+		// Split the pending transactions into locals and remotes
+		localTxs, remoteTxs := make(map[common.Address]types.Transactions), pending
+		for _, account := range w.eth.TxPool().Locals() {
+			if txs := remoteTxs[account]; len(txs) > 0 {
+				delete(remoteTxs, account)
+				localTxs[account] = txs
+			}
+		}
+		if w.flashbots.isFlashbots {
+			bundles, err := w.eth.TxPool().MevBundles(header.Number, header.Time)
+			if err != nil {
+				log.Error("Failed to fetch pending transactions", "err", err)
+				return
+			}
 
-		bundleTxs, bundle, numBundles, err := w.generateFlashbotsBundle(bundles, w.coinbase, parent, header, pending)
-		if err != nil {
-			log.Error("Failed to generate flashbots bundle", "err", err)
-			return
+			bundleTxs, bundle, numBundles, err := w.generateFlashbotsBundle(bundles, w.coinbase, parent, header, pending)
+			if err != nil {
+				log.Error("Failed to generate flashbots bundle", "err", err)
+				return
+			}
+			log.Info("Flashbots bundle", "ethToCoinbase", ethIntToFloat(bundle.totalEth), "gasUsed", bundle.totalGasUsed, "bundleScore", bundle.mevGasPrice, "bundleLength", len(bundleTxs), "numBundles", numBundles, "worker", w.flashbots.maxMergedBundles)
+			if len(bundleTxs) == 0 {
+				return
+			}
+			if w.commitBundle(bundleTxs, w.coinbase, interrupt) {
+				return
+			}
+			w.current.profit.Add(w.current.profit, bundle.totalEth)
 		}
-		log.Info("Flashbots bundle", "ethToCoinbase", ethIntToFloat(bundle.totalEth), "gasUsed", bundle.totalGasUsed, "bundleScore", bundle.mevGasPrice, "bundleLength", len(bundleTxs), "numBundles", numBundles, "worker", w.flashbots.maxMergedBundles)
-		if len(bundleTxs) == 0 {
-			return
+		if len(localTxs) > 0 {
+			txs := types.NewTransactionsByPriceAndNonce(w.current.signer, localTxs)
+			if w.commitTransactions(txs, w.coinbase, interrupt) {
+				return
+			}
 		}
-		if w.commitBundle(bundleTxs, w.coinbase, interrupt) {
-			return
+		if len(remoteTxs) > 0 {
+			txs := types.NewTransactionsByPriceAndNonce(w.current.signer, remoteTxs)
+			if w.commitTransactions(txs, w.coinbase, interrupt) {
+				return
+			}
 		}
-		w.current.profit.Add(w.current.profit, bundle.totalEth)
+		w.commit(uncles, w.fullTaskHook, true, tstart)
 	}
-	if len(localTxs) > 0 {
-		txs := types.NewTransactionsByPriceAndNonce(w.current.signer, localTxs)
-		if w.commitTransactions(txs, w.coinbase, interrupt) {
-			return
-		}
-	}
-	if len(remoteTxs) > 0 {
-		txs := types.NewTransactionsByPriceAndNonce(w.current.signer, remoteTxs)
-		if w.commitTransactions(txs, w.coinbase, interrupt) {
-			return
-		}
-	}
-	w.commit(uncles, w.fullTaskHook, true, tstart)
 }
 
 // commit runs any post-transaction state modifications, assembles the final block
